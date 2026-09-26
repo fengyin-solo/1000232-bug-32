@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 from app.seed import SEED_ROWS
@@ -14,6 +15,16 @@ class Store:
         self._tables: dict[str, list[dict[str, Any]]] = {
             name: [dict(row) for row in rows] for name, rows in SEED_ROWS.items()
         }
+        # 读改写（登记、流转、更新）都必须在这把锁里完成，避免并发提交互相覆盖。
+        self._lock = threading.RLock()
+
+    @property
+    def lock(self) -> threading.RLock:
+        return self._lock
+
+    def next_id(self, module: str) -> int:
+        """分配下一条记录的 id；调用方必须已经持有 lock。"""
+        return max((int(row.get("id", 0)) for row in self.rows(module)), default=0) + 1
 
     def module_names(self) -> list[str]:
         return sorted(self._tables)
